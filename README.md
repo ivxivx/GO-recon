@@ -1,41 +1,40 @@
-# IO
-- resource: a wrapper for data (in the form of bytes or file) which resides in local machine or remotely
-- reader: a reader reads data from resource and unmarshalls it according to certain format
-- writer: a writer marshalls data into certain format and writes to resource
-- transformer: there are a few types of transformers
-  - record extractor: a record extractor extracts records from input, e.g. extracts Transactions from the response of Get Transactions API
-  - field extractor: a field extract fields from input, e.g. extracts fields (amount, currency, etc.) from a transaction record
-  - field transformer: a field transformer transforms a field (a cell in CSV) from one format to another
+# Transaction Reconciliation
+Transaction reconciliation is the process of comparing two sets of transactions from two parties in order to find matches and discrepancies.
+
+## Flow
+The core flow is illustrated below:
 
 ```mermaid
-graph LR
-   Resource --> Reader --> Transformer --> Processor("(Processor)") --> Writer --> Transformer --> Resource
+sequenceDiagram
+  actor Cron
+  participant Recon as Reconciler
+  participant PTY1 as [Party1]
+  participant PTY2 as [Party2]
+
+  Cron -> Recon: Trigger recon
+  Recon ->> PTY1: Retrieve transactions of Party1
+  PTY1 -->> Recon: result
+  Recon ->> PTY2: Retrieve transactions of Party2
+  PTY2 -->> Recon: result
+
+  loop Every transaction of Party1
+    Recon ->> Recon: Filter transaction
+    Recon ->> Recon: Find matching<br/>transaction from Party2
+    alt Found
+      Recon ->> Recon: Compare two transactions
+      Recon ->> Recon: Mark as `matched` or<br/>`mismatched`
+    else
+        Recon ->> Recon: Mark as `party1 only`
+    end
+  end
+
+  loop Every transaction of Party2
+    Recon ->> Recon: Similar to previous loop
+  end
 ```
 
-- Processors are specific to business scenarios, currenctly there is no interface for them.
-
-## Resource
-A resource may reside locally or remotely and can be accessed via certain protocol, such as HTTP or FTP.
-
-Currently supported resources include:
-- memory resource: data in memory
-- local resource: a file on local file system
-- http resource: resource can be accessed via HTTP (GET)
-- sftp resource: resource can be accessed via Sftp
-
-## Readers
-Currently supported readers include:
-- csv reader
-- json reader
-- composite reader: ustilize multiple readers (may handle different data formats) to read data
-
-## Writers
-Currently supported writer include:
-- csv writer
-
-# Usage
-## Example
-- csv reader + local resource: read a CSV file from local file system
-- csv reader + sftp resource: read a CSV file from remote file system via Sftp
-- json reader + http resource: read JSON data from remote system via HTTP
-- csv writer + memory resource: format a report as CSV and send it via email, without storing data in file system
+## Concepts
+- Party: Reconciliation involves two parties.
+- Collection: A collection contains transactions fetched from two parties.
+- Filter: A filter uses some criteria to filter out  transactions before they can be passed over for comparison. Criteria may be a time range or a collection of statuses.
+- Comparator: A comparator compares two transactions from two parties, in order to find whether they are matching.
